@@ -1,0 +1,116 @@
+<Window x:Class="ManifestDownloaderGUI.Windows.PBE1DownloadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Download PBE1 Folder" Height="500" Width="700"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}"
+        Foreground="{StaticResource TextBrush}"
+        ResizeMode="NoResize">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" Padding="30,25" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <TextBlock Text="📥 Download PBE1 Folder Locally" FontSize="26" FontWeight="Bold" 
+                       Foreground="{StaticResource TextBrush}"/>
+        </Border>
+        
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="{StaticResource BackgroundBrush}">
+            <StackPanel Margin="40,30">
+                <!-- Info Card -->
+                <Border Background="{StaticResource SurfaceBrush}" 
+                        BorderBrush="{StaticResource BorderBrush}" 
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="25"
+                        Margin="0,0,0,30">
+                    <StackPanel>
+                        <TextBlock Text="ℹ️ Why download PBE1 locally?" 
+                                  FontSize="16" FontWeight="Bold" 
+                                  Foreground="{StaticResource PrimaryBrush}" 
+                                  Margin="0,0,0,10"/>
+                        <TextBlock TextWrapping="Wrap" 
+                                  Foreground="{StaticResource TextBrush}" 
+                                  FontSize="14" 
+                                  LineHeight="22">
+                            PBE1 has more than 1000 manifest files, which exceeds GitHub's web interface limit. 
+                            By downloading the folder locally, you can access ALL patches and manifests instantly without API rate limits.
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Instructions Card -->
+                <Border Background="{StaticResource SurfaceBrush}" 
+                        BorderBrush="{StaticResource BorderBrush}" 
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="25"
+                        Margin="0,0,0,30">
+                    <StackPanel>
+                        <TextBlock Text="📝 Instructions:" 
+                                  FontSize="15" FontWeight="SemiBold" 
+                                  Foreground="{StaticResource TextBrush}" 
+                                  Margin="0,0,0,15"/>
+                        <TextBlock TextWrapping="Wrap" 
+                                  Foreground="{StaticResource TextSecondaryBrush}" 
+                                  FontSize="13" 
+                                  LineHeight="20">
+                            <Run Text="1. "/><Run FontWeight="SemiBold">Click</Run> "Download PBE1 Folder" button below<LineBreak/>
+                            <Run Text="2. "/><Run FontWeight="SemiBold">Wait</Run> for all files to download (may take a few minutes)<LineBreak/>
+                            <Run Text="3. "/><Run FontWeight="SemiBold">Once complete</Run>, the application will automatically use the local files for PBE1<LineBreak/>
+                            <Run Text="4. "/><Run FontWeight="SemiBold">Location:</Run> <Run FontFamily="Consolas">%LocalAppData%\ManifestDownloaderGUI\local-repo\LoL\PBE1\windows\lol-game-client</Run>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Progress Section -->
+                <Border Background="{StaticResource SurfaceBrush}" 
+                        BorderBrush="{StaticResource BorderBrush}" 
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="25"
+                        Margin="0,0,0,25">
+                    <StackPanel>
+                        <TextBlock x:Name="StatusText" 
+                                  TextWrapping="Wrap"
+                                  Foreground="{StaticResource TextBrush}"
+                                  FontSize="14"
+                                  LineHeight="22"
+                                  Text="Ready to download. Click the button below to start."/>
+                        
+                        <ProgressBar x:Name="ProgressBar" 
+                                   IsIndeterminate="True" 
+                                   Visibility="Collapsed"
+                                   Height="6"
+                                   Margin="0,15,0,0"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+        
+        <!-- Footer with Buttons -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="30,20" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="1" x:Name="DownloadBtn" Content="📥 Download PBE1 Folder" 
+                        Click="DownloadBtn_Click"
+                        Padding="35,12"
+                        Height="45"
+                        FontSize="14"
+                        FontWeight="SemiBold"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
+
+
+
+
