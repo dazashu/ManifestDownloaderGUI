@@ -12,6 +12,7 @@ namespace ManifestDownloaderGUI
         public static string CachePath { get; private set; } = string.Empty;
         public static string LocalRepoPath { get; private set; } = string.Empty;
 
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
@@ -33,7 +34,7 @@ namespace ManifestDownloaderGUI
                 Directory.CreateDirectory(AppDataPath);
                 Directory.CreateDirectory(ManifestsPath);
                 Directory.CreateDirectory(CachePath);
-                Directory.CreateDirectory(LocalRepoPath);
+
 
                 // Auto-deploy tool if missing
                 DeployTools();
