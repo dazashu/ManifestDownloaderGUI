@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -46,6 +47,13 @@ namespace ManifestDownloaderGUI
             }
         }
 
+        private static string ComputeSha256(Stream stream)
+        {
+            using var sha256 = SHA256.Create();
+            byte[] hash = sha256.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
         private void DeployTools()
         {
             try
@@ -57,32 +65,47 @@ namespace ManifestDownloaderGUI
                 }
 
                 string targetExe = Path.Combine(toolsDir, "ManifestDownloader.exe");
-                
-                // If the exe doesn't exist in AppData, extract it from embedded resources
-                if (!File.Exists(targetExe))
-                {
-                    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                    string resourceName = "ManifestDownloaderGUI.ManifestDownloader.exe";
 
-                    using (Stream? stream = assembly.GetManifestResourceStream(resourceName))
+                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                string resourceName = "ManifestDownloaderGUI.ManifestDownloader.exe";
+
+                using (Stream? stream = assembly.GetManifestResourceStream(resourceName))
+                {
+                    if (stream == null)
                     {
-                        if (stream != null)
+                        System.Diagnostics.Debug.WriteLine($"Embedded resource not found: {resourceName}");
+                        foreach (var res in assembly.GetManifestResourceNames())
+                            System.Diagnostics.Debug.WriteLine($"Available resource: {res}");
+                        return;
+                    }
+
+                    // Compute hash of the embedded (bundled) exe
+                    string embeddedHash = ComputeSha256(stream);
+
+                    // Check if deployed exe exists and has the same hash
+                    bool needsDeploy = true;
+                    if (File.Exists(targetExe))
+                    {
+                        using (FileStream existingStream = new FileStream(targetExe, FileMode.Open, FileAccess.Read))
                         {
-                            using (FileStream fileStream = new FileStream(targetExe, FileMode.Create, FileAccess.Write))
-                            {
-                                stream.CopyTo(fileStream);
-                            }
-                            System.Diagnostics.Debug.WriteLine($"Extracted tool to: {targetExe}");
+                            string existingHash = ComputeSha256(existingStream);
+                            needsDeploy = !string.Equals(embeddedHash, existingHash, StringComparison.OrdinalIgnoreCase);
                         }
+
+                        if (needsDeploy)
+                            System.Diagnostics.Debug.WriteLine("Hash mismatch detected — replacing ManifestDownloader.exe.");
                         else
+                            System.Diagnostics.Debug.WriteLine("ManifestDownloader.exe is up-to-date (hash match).");
+                    }
+
+                    if (needsDeploy)
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                        using (FileStream fileStream = new FileStream(targetExe, FileMode.Create, FileAccess.Write))
                         {
-                            System.Diagnostics.Debug.WriteLine($"Embedded resource not found: {resourceName}");
-                            // Log all resources for debugging if not found
-                            foreach (var res in assembly.GetManifestResourceNames())
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Available resource: {res}");
-                            }
+                            stream.CopyTo(fileStream);
                         }
+                        System.Diagnostics.Debug.WriteLine($"Deployed tool to: {targetExe}");
                     }
                 }
             }

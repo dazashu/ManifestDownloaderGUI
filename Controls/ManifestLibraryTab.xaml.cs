@@ -639,10 +639,13 @@ namespace ManifestDownloaderGUI
 
         private void BrowseBtn_Click(object sender, RoutedEventArgs e)
         {
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog();
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                OutputPath.Text = dialog.SelectedPath;
+                Title = "Select Output Folder"
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                OutputPath.Text = dialog.FolderName;
             }
         }
 

@@ -172,8 +172,8 @@ namespace ManifestDownloaderGUI.Windows
                 "- All downloaded manifests\n" +
                 "- All cached data\n" +
                 "- Your GitHub settings (including the token)\n" +
-                "- All saved selection states\n\n" +
-                "The only thing kept will be the ManifestDownloader.exe tool.\n\n" +
+                "- All saved selection states\n" +
+                "- The ManifestDownloader.exe tool (will be re-deployed on next launch)\n\n" +
                 "The application will close and you will need to restart it.\n\n" +
                 "Are you sure you want to continue?",
                 "Hard Refresh / Factory Reset", MessageBoxButton.YesNo, MessageBoxImage.Warning);
@@ -185,30 +185,27 @@ namespace ManifestDownloaderGUI.Windows
                     var appDataDir = new System.IO.DirectoryInfo(App.AppDataPath);
                     if (appDataDir.Exists)
                     {
-                        // Delete all subdirectories except "Tools"
+                        // Delete ALL subdirectories (including Tools)
                         foreach (var dir in appDataDir.GetDirectories())
                         {
-                            if (dir.Name.Equals("Tools", StringComparison.OrdinalIgnoreCase))
-                                continue;
-                            
-                            try { dir.Delete(true); } 
+                            try { dir.Delete(true); }
                             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Could not delete directory {dir.Name}: {ex.Message}"); }
                         }
 
                         // Delete all files in the root AppData directory
                         foreach (var file in appDataDir.GetFiles())
                         {
-                            try { file.Delete(); } 
+                            try { file.Delete(); }
                             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Could not delete file {file.Name}: {ex.Message}"); }
                         }
                     }
 
-                    MessageBox.Show("Factory reset complete. The application will now close.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show("Factory reset complete. The application will now close.\nManifestDownloader.exe will be re-deployed automatically on next launch.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                     Application.Current.Shutdown();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error during factory reset: {ex.Message}\n\nSome files might be in use. Try closing the app and deleting the folder '{App.AppDataPath}' manually (keep the 'Tools' folder).", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show($"Error during factory reset: {ex.Message}\n\nSome files might be in use. Try closing the app and deleting the folder '{App.AppDataPath}' manually.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
