@@ -60,7 +60,7 @@ namespace ManifestDownloaderGUI.Windows
                 if (!check.IsUpdateAvailable)
                 {
                     ModernDialog.ShowInfo(this, "No Updates",
-                        $"You are running the latest version ({AppUpdateService.CurrentAppVersionString}).",
+                        $"You are running the latest version ({check.LatestTag ?? AppUpdateService.CurrentAppVersionString}).",
                         icon: "✅");
                     return;
                 }
@@ -74,13 +74,18 @@ namespace ManifestDownloaderGUI.Windows
                     primaryLabel: "Update & Restart",
                     secondaryLabel: "Later",
                     icon: "🚀");
-                if (!accepted) return;
+                if (!accepted)
+                {
+                    updateService.AcknowledgeVersion(check.LatestTag ?? "");
+                    return;
+                }
 
                 var dlg = new AppUpdateDownloadWindow(updateService, check) { Owner = this };
                 dlg.ShowDialog();
 
                 if (dlg.DownloadSucceeded && !string.IsNullOrEmpty(dlg.DownloadedPath))
                 {
+                    updateService.AcknowledgeVersion(check.LatestTag ?? "");
                     try
                     {
                         updateService.LaunchUpdateAndExit(dlg.DownloadedPath);

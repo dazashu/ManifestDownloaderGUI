@@ -7,9 +7,9 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>ManifestDownloaderGUI</AssemblyName>
     <RootNamespace>ManifestDownloaderGUI</RootNamespace>
-    <Version>1.2.0</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.3.0</Version>
+    <AssemblyVersion>1.3.0.0</AssemblyVersion>
+    <FileVersion>1.3.0.0</FileVersion>
     <Authors>ManifestDownloader GUI</Authors>
     <Description>Modern GUI for ManifestDownloader</Description>
     <ApplicationIcon>unnamed.ico</ApplicationIcon>
