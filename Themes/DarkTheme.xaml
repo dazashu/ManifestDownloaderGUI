@@ -315,12 +315,15 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
-                    <Border Background="{TemplateBinding Background}" 
-                            CornerRadius="3">
-                        <Rectangle x:Name="PART_Track" 
-                                   Fill="{TemplateBinding Foreground}"
-                                   RadiusX="3"
-                                   RadiusY="3"/>
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="3"
+                            ClipToBounds="True">
+                        <Grid x:Name="PART_Track">
+                            <Border x:Name="PART_Indicator"
+                                    Background="{TemplateBinding Foreground}"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="3"/>
+                        </Grid>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>

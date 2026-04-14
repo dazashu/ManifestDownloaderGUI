@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ManifestDownloaderGUI.Services;
+using ManifestDownloaderGUI.Windows;
 
 namespace ManifestDownloaderGUI
 {
     public partial class ManifestLibraryTab : UserControl
     {
         private Process? _downloadProcess;
+        private bool _stopRequested;
         private string? _exePath;
         private bool _isRefreshing = false;
         private bool _isLoadingPatches = false;
@@ -40,8 +42,8 @@ namespace ManifestDownloaderGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error initializing ManifestLibraryTab: {ex.Message}\n\n{ex.StackTrace}", 
-                    "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Initialization Error",
+                    $"Error initializing ManifestLibraryTab: {ex.Message}\n\n{ex.StackTrace}");
             }
         }
 
@@ -179,7 +181,8 @@ namespace ManifestDownloaderGUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error in RefreshManifests: {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show($"Error loading manifests: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    $"Error loading manifests: {ex.Message}");
             }
             finally
             {
@@ -607,13 +610,15 @@ namespace ManifestDownloaderGUI
 
         private void DeleteManifestInternal(ManifestFileInfo info)
         {
-            var result = MessageBox.Show(
-                $"Are you sure you want to delete the manifest '{info.Name}'?\n\nThis will remove it from your library.",
+            var confirmed = ModernDialog.ShowConfirm(
+                Window.GetWindow(this),
                 "Confirm Delete",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+                $"Are you sure you want to delete the manifest '{info.Name}'?\n\nThis will remove it from your library.",
+                primaryLabel: "Delete",
+                secondaryLabel: "Cancel",
+                icon: "🗑️");
 
-            if (result == MessageBoxResult.Yes)
+            if (confirmed)
             {
                 try
                 {
@@ -621,18 +626,19 @@ namespace ManifestDownloaderGUI
                     {
                         File.Delete(info.FullPath);
                         System.Diagnostics.Debug.WriteLine($"Deleted manifest: {info.FullPath}");
-                        
+
                         // Explicitly clear UI to prevent zombie entries
                         DownloadBtn.IsEnabled = false;
                         DeleteManifestBtn.Visibility = Visibility.Collapsed;
-                        
+
                         // Refresh the list
                         RefreshManifests();
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error deleting manifest: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                        $"Error deleting manifest: {ex.Message}");
                 }
             }
         }
@@ -734,38 +740,34 @@ namespace ManifestDownloaderGUI
         {
             if (string.IsNullOrEmpty(_exePath) || !File.Exists(_exePath))
             {
-                MessageBox.Show(
-                    $"ManifestDownloader.exe not found at:\n{_exePath}\n\nPlease ensure the executable is in the correct location.",
-                    "Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error
-                );
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    $"ManifestDownloader.exe not found at:\n{_exePath}\n\nPlease ensure the executable is in the correct location.");
                 return;
             }
 
             if (ManifestCombo.SelectedItem == null)
             {
-                MessageBox.Show("Please select a manifest first.", "Warning",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                ModernDialog.ShowError(Window.GetWindow(this), "Warning",
+                    "Please select a manifest first.");
                 return;
             }
 
             try
             {
-                if (ManifestCombo.SelectedItem is not ComboBoxItem selectedItem || 
+                if (ManifestCombo.SelectedItem is not ComboBoxItem selectedItem ||
                     selectedItem.Tag is not ManifestFileInfo manifestInfo)
                 {
-                    MessageBox.Show("Please select a valid manifest first.", "Warning",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    ModernDialog.ShowError(Window.GetWindow(this), "Warning",
+                        "Please select a valid manifest first.");
                     return;
                 }
-                
+
                 var manifestPath = manifestInfo.FullPath;
-                
+
                 if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
                 {
-                    MessageBox.Show("Selected manifest file does not exist.", "Error",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                        "Selected manifest file does not exist.");
                     return;
                 }
 
@@ -778,13 +780,14 @@ namespace ManifestDownloaderGUI
                 StopDownloadBtn.IsEnabled = true;
                 LogPanel.Visibility = Visibility.Visible;
                 ShowLogBtn.Visibility = Visibility.Collapsed;
+                _stopRequested = false;
 
                 await StartDownloadProcessAsync(_exePath, args);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error: {ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    $"Error: {ex.Message}");
                 ProgressBar.Visibility = Visibility.Collapsed;
                 DownloadBtn.IsEnabled = true;
             }
@@ -845,13 +848,29 @@ namespace ManifestDownloaderGUI
                     DownloadBtn.IsEnabled = true;
                     StopDownloadBtn.IsEnabled = false;
 
+                    var wasCancelled = _downloadProcess.ExitCode != 0 && _stopRequested;
                     if (_downloadProcess.ExitCode == 0)
                     {
                         LogOutput.AppendText("\n✓ Download completed successfully!\n");
+                        var outputDir = OutputPath.Text.Trim();
+                        ModernDialog.ShowInfo(
+                            Window.GetWindow(this),
+                            "Download Complete",
+                            $"Manifest download finished successfully.\n\n" +
+                            (string.IsNullOrEmpty(outputDir) ? "" : $"Output folder:\n{outputDir}"),
+                            icon: "✅");
+                    }
+                    else if (!wasCancelled)
+                    {
+                        LogOutput.AppendText($"\n✗ Download failed with exit code {_downloadProcess.ExitCode}\n");
+                        ModernDialog.ShowError(
+                            Window.GetWindow(this),
+                            "Download Failed",
+                            $"ManifestDownloader exited with code {_downloadProcess.ExitCode}. Check the log for details.");
                     }
                     else
                     {
-                        LogOutput.AppendText($"\n✗ Download failed with exit code {_downloadProcess.ExitCode}\n");
+                        LogOutput.AppendText("\n⏹ Download cancelled.\n");
                     }
                 });
             }
@@ -862,6 +881,10 @@ namespace ManifestDownloaderGUI
                     ProgressBar.Visibility = Visibility.Collapsed;
                     DownloadBtn.IsEnabled = true;
                     LogOutput.AppendText($"\n✗ Error: {ex.Message}\n");
+                    ModernDialog.ShowError(
+                        Window.GetWindow(this),
+                        "Download Error",
+                        $"An error occurred during download:\n\n{ex.Message}");
                 });
             }
         }
@@ -890,6 +913,7 @@ namespace ManifestDownloaderGUI
 
         private void StopDownloadBtn_Click(object sender, RoutedEventArgs e)
         {
+            _stopRequested = true;
             StopDownload();
             LogOutput.AppendText("\n⚠ Download stopped by user\n");
         }
@@ -900,6 +924,7 @@ namespace ManifestDownloaderGUI
             {
                 if (_downloadProcess != null && !_downloadProcess.HasExited)
                 {
+                    _stopRequested = true;
                     System.Diagnostics.Debug.WriteLine("Killing download process...");
                     _downloadProcess.Kill(true); // Kill process tree
                     _downloadProcess.WaitForExit(2000); // Wait up to 2 seconds

@@ -56,14 +56,11 @@ namespace ManifestDownloaderGUI.Windows
                     if (success)
                     {
                         StatusText.Text = "✓ Download completed successfully! The application will now use local files for PBE1.";
-                        MessageBox.Show(
+                        ModernDialog.ShowInfo(this, "Success",
                             "PBE1 folder downloaded successfully!\n\n" +
                             "The application will now automatically use local files for PBE1.\n" +
                             "You can close this window and select PBE1 server to see all patches.",
-                            "Success",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information
-                        );
+                            icon: "✅");
                     }
                     else
                     {
@@ -73,16 +70,12 @@ namespace ManifestDownloaderGUI.Windows
                             : "Download failed. Please check your internet connection and try again.";
                         
                         StatusText.Text = $"✗ {errorMessage}";
-                        MessageBox.Show(
+                        ModernDialog.ShowError(this, "Error",
                             $"Download failed:\n\n{errorMessage}\n\n" +
                             "Possible solutions:\n" +
                             "• Check your internet connection\n" +
                             "• Configure a GitHub token in Settings to avoid rate limits\n" +
-                            "• Wait a few minutes and try again",
-                            "Error",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Error
-                        );
+                            "• Wait a few minutes and try again");
                     }
                 });
             }
@@ -97,14 +90,10 @@ namespace ManifestDownloaderGUI.Windows
                         : ex.Message;
                     
                     StatusText.Text = $"✗ Error: {errorMsg}";
-                    MessageBox.Show(
+                    ModernDialog.ShowError(this, "Error",
                         $"Error downloading PBE1 folder:\n\n{errorMsg}\n\n" +
                         (ex.InnerException != null ? $"Details: {ex.InnerException.Message}\n\n" : "") +
-                        "Please check your internet connection and try again.",
-                        "Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error
-                    );
+                        "Please check your internet connection and try again.");
                 });
             }
         }

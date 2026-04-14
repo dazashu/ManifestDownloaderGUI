@@ -110,6 +110,50 @@ namespace ManifestDownloaderGUI.Services
         {
             SaveGitHubToken(string.Empty);
         }
+
+        private AppConfig LoadConfig()
+        {
+            if (!File.Exists(_configFile)) return new AppConfig();
+            try
+            {
+                var json = File.ReadAllText(_configFile);
+                return JsonConvert.DeserializeObject<AppConfig>(json) ?? new AppConfig();
+            }
+            catch
+            {
+                return new AppConfig();
+            }
+        }
+
+        private void SaveConfig(AppConfig config)
+        {
+            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
+            File.WriteAllText(_configFile, json);
+        }
+
+        public string? GetManifestDownloaderVersion()
+        {
+            return LoadConfig().ManifestDownloaderVersion;
+        }
+
+        public void SaveManifestDownloaderVersion(string version)
+        {
+            var config = LoadConfig();
+            config.ManifestDownloaderVersion = version;
+            SaveConfig(config);
+        }
+
+        public bool GetNotifyUpdates()
+        {
+            return LoadConfig().NotifyUpdates ?? true;
+        }
+
+        public void SaveNotifyUpdates(bool value)
+        {
+            var config = LoadConfig();
+            config.NotifyUpdates = value;
+            SaveConfig(config);
+        }
     }
 
     /// <summary>
@@ -119,6 +163,12 @@ namespace ManifestDownloaderGUI.Services
     {
         [JsonProperty("githubTokenEncrypted")]
         public string? GitHubTokenEncrypted { get; set; }
+
+        [JsonProperty("manifestDownloaderVersion")]
+        public string? ManifestDownloaderVersion { get; set; }
+
+        [JsonProperty("notifyUpdates")]
+        public bool? NotifyUpdates { get; set; }
     }
 }
 

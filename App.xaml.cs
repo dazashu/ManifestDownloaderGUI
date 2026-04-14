@@ -1,8 +1,10 @@
 using System;
 using System.IO;
-using System.Security.Cryptography;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using ManifestDownloaderGUI.Services;
+using ManifestDownloaderGUI.Windows;
 
 namespace ManifestDownloaderGUI
 {
@@ -13,112 +15,207 @@ namespace ManifestDownloaderGUI
         public static string CachePath { get; private set; } = string.Empty;
         public static string LocalRepoPath { get; private set; } = string.Empty;
 
-
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-            
-            // Global exception handling
+
             this.DispatcherUnhandledException += App_DispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            
+
             try
             {
-                // Get AppData Local path
                 string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 AppDataPath = Path.Combine(localAppData, "ManifestDownloaderGUI");
                 ManifestsPath = Path.Combine(AppDataPath, "manifests");
                 CachePath = Path.Combine(AppDataPath, "cache");
                 LocalRepoPath = Path.Combine(AppDataPath, "local-repo");
-                
-                // Create directories if they don't exist
+
                 Directory.CreateDirectory(AppDataPath);
                 Directory.CreateDirectory(ManifestsPath);
                 Directory.CreateDirectory(CachePath);
+                Directory.CreateDirectory(Path.Combine(AppDataPath, "Tools"));
 
+                var configService = new ConfigService(AppDataPath);
+                var updateService = new ManifestDownloaderUpdateService(configService);
 
-                // Auto-deploy tool if missing
-                DeployTools();
+                if (!updateService.ExeExists)
+                {
+                    BootstrapDownloadBlocking(updateService);
+                }
+                else
+                {
+                    ScheduleBackgroundUpdateCheck(configService, updateService);
+                }
+
+                ScheduleBackgroundAppUpdateCheck(configService);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error initializing application: {ex.Message}\n\n{ex.StackTrace}", 
-                    "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(null, "Startup Error",
+                    $"Error initializing application: {ex.Message}\n\n{ex.StackTrace}");
             }
         }
 
-        private static string ComputeSha256(Stream stream)
-        {
-            using var sha256 = SHA256.Create();
-            byte[] hash = sha256.ComputeHash(stream);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-        }
-
-        private void DeployTools()
+        private void BootstrapDownloadBlocking(ManifestDownloaderUpdateService updateService)
         {
             try
             {
-                string toolsDir = Path.Combine(AppDataPath, "Tools");
-                if (!Directory.Exists(toolsDir))
+                var check = updateService.CheckForUpdateAsync().GetAwaiter().GetResult();
+                if (!check.Success || string.IsNullOrEmpty(check.DownloadUrl))
                 {
-                    Directory.CreateDirectory(toolsDir);
+                    ModernDialog.ShowError(null, "Setup Required",
+                        "ManifestDownloader.exe is not installed and could not be downloaded from GitHub:\n\n" +
+                        (check.Error ?? "Unknown error") +
+                        "\n\nPlease check your internet connection and restart the app.");
+                    return;
                 }
 
-                string targetExe = Path.Combine(toolsDir, "ManifestDownloader.exe");
+                var dlg = new DownloadProgressWindow(updateService, check);
+                dlg.ShowDialog();
 
-                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                string resourceName = "ManifestDownloaderGUI.ManifestDownloader.exe";
-
-                using (Stream? stream = assembly.GetManifestResourceStream(resourceName))
+                if (!dlg.DownloadSucceeded)
                 {
-                    if (stream == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Embedded resource not found: {resourceName}");
-                        foreach (var res in assembly.GetManifestResourceNames())
-                            System.Diagnostics.Debug.WriteLine($"Available resource: {res}");
-                        return;
-                    }
-
-                    // Compute hash of the embedded (bundled) exe
-                    string embeddedHash = ComputeSha256(stream);
-
-                    // Check if deployed exe exists and has the same hash
-                    bool needsDeploy = true;
-                    if (File.Exists(targetExe))
-                    {
-                        using (FileStream existingStream = new FileStream(targetExe, FileMode.Open, FileAccess.Read))
-                        {
-                            string existingHash = ComputeSha256(existingStream);
-                            needsDeploy = !string.Equals(embeddedHash, existingHash, StringComparison.OrdinalIgnoreCase);
-                        }
-
-                        if (needsDeploy)
-                            System.Diagnostics.Debug.WriteLine("Hash mismatch detected — replacing ManifestDownloader.exe.");
-                        else
-                            System.Diagnostics.Debug.WriteLine("ManifestDownloader.exe is up-to-date (hash match).");
-                    }
-
-                    if (needsDeploy)
-                    {
-                        stream.Seek(0, SeekOrigin.Begin);
-                        using (FileStream fileStream = new FileStream(targetExe, FileMode.Create, FileAccess.Write))
-                        {
-                            stream.CopyTo(fileStream);
-                        }
-                        System.Diagnostics.Debug.WriteLine($"Deployed tool to: {targetExe}");
-                    }
+                    ModernDialog.ShowError(null, "Download Failed",
+                        "The ManifestDownloader tool could not be downloaded. The app may not function until it is installed.\n\n" +
+                        (dlg.ErrorMessage ?? ""));
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error deploying tools: {ex.Message}");
+                ModernDialog.ShowError(null, "Setup Error",
+                    $"Error during first-time download: {ex.Message}");
             }
+        }
+
+        private void ScheduleBackgroundUpdateCheck(ConfigService configService, ManifestDownloaderUpdateService updateService)
+        {
+            if (!configService.GetNotifyUpdates())
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(1500);
+                    var check = await updateService.CheckForUpdateAsync();
+                    if (!check.Success || !check.IsUpdateAvailable || string.IsNullOrEmpty(check.DownloadUrl))
+                        return;
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        var owner = Current?.MainWindow;
+                        var accepted = ModernDialog.ShowUpdateAvailable(
+                            owner,
+                            "ManifestDownloader Update Available",
+                            "A new version of the ManifestDownloader tool is available. Do you want to download it now?",
+                            check.InstalledVersion ?? "(unknown)",
+                            check.LatestVersion ?? "",
+                            primaryLabel: "Download",
+                            secondaryLabel: "Later",
+                            icon: "⬇️");
+
+                        if (accepted)
+                        {
+                            var dlg = new DownloadProgressWindow(updateService, check) { Owner = owner };
+                            dlg.ShowDialog();
+
+                            if (dlg.DownloadSucceeded)
+                            {
+                                ModernDialog.ShowInfo(owner,
+                                    "Update Complete",
+                                    $"ManifestDownloader has been updated to {check.LatestVersion}.",
+                                    icon: "✅");
+                            }
+                            else if (!string.IsNullOrEmpty(dlg.ErrorMessage))
+                            {
+                                ModernDialog.ShowError(owner,
+                                    "Update Failed",
+                                    $"Update failed: {dlg.ErrorMessage}");
+                            }
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Background update check failed: {ex.Message}");
+                }
+            });
+        }
+
+        private void ScheduleBackgroundAppUpdateCheck(ConfigService configService)
+        {
+            if (!configService.GetNotifyUpdates())
+                return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(2500);
+                    using var appUpdateService = new AppUpdateService(configService);
+                    var check = await appUpdateService.CheckForUpdateAsync();
+                    if (!check.Success || !check.IsUpdateAvailable || string.IsNullOrEmpty(check.DownloadUrl))
+                        return;
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        var owner = Current?.MainWindow;
+                        var accepted = ModernDialog.ShowUpdateAvailable(
+                            owner,
+                            "App Update Available",
+                            "A new version of ManifestDownloaderGUI is available. Download and install now? The app will restart automatically.",
+                            check.InstalledVersion ?? "",
+                            check.LatestTag ?? "",
+                            primaryLabel: "Update & Restart",
+                            secondaryLabel: "Later",
+                            icon: "🚀");
+
+                        if (!accepted) return;
+
+                        var dlg = new AppUpdateDownloadWindow(appUpdateService, check) { Owner = owner };
+                        dlg.ShowDialog();
+
+                        if (dlg.DownloadSucceeded && !string.IsNullOrEmpty(dlg.DownloadedPath))
+                        {
+                            try
+                            {
+                                appUpdateService.LaunchUpdateAndExit(dlg.DownloadedPath);
+                                Current?.Shutdown();
+                            }
+                            catch (Exception ex)
+                            {
+                                ModernDialog.ShowError(owner,
+                                    "Update Failed",
+                                    $"Could not apply update: {ex.Message}\n\nThe downloaded file is at:\n{dlg.DownloadedPath}");
+                            }
+                        }
+                        else if (!string.IsNullOrEmpty(dlg.ErrorMessage))
+                        {
+                            ModernDialog.ShowError(owner,
+                                "Update Failed",
+                                $"Update failed: {dlg.ErrorMessage}");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Background app update check failed: {ex.Message}");
+                }
+            });
         }
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            MessageBox.Show($"An unhandled exception occurred:\n\n{e.Exception.Message}\n\n{e.Exception.StackTrace}", 
-                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            try
+            {
+                ModernDialog.ShowError(Current?.MainWindow, "Error",
+                    $"An unhandled exception occurred:\n\n{e.Exception.Message}\n\n{e.Exception.StackTrace}");
+            }
+            catch
+            {
+                MessageBox.Show($"An unhandled exception occurred:\n\n{e.Exception.Message}\n\n{e.Exception.StackTrace}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
             e.Handled = true;
         }
 
@@ -126,10 +223,17 @@ namespace ManifestDownloaderGUI
         {
             if (e.ExceptionObject is Exception ex)
             {
-                MessageBox.Show($"A fatal error occurred:\n\n{ex.Message}\n\n{ex.StackTrace}", 
-                    "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                try
+                {
+                    ModernDialog.ShowError(Current?.MainWindow, "Fatal Error",
+                        $"A fatal error occurred:\n\n{ex.Message}\n\n{ex.StackTrace}");
+                }
+                catch
+                {
+                    MessageBox.Show($"A fatal error occurred:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                        "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
     }
 }
-

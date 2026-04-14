@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using ManifestDownloaderGUI.Services;
+using ManifestDownloaderGUI.Windows;
 using ManifestInfo = ManifestDownloaderGUI.Services.ManifestInfo;
 
 namespace ManifestDownloaderGUI
@@ -37,8 +38,8 @@ namespace ManifestDownloaderGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error initializing ManifestDownloaderTab: {ex.Message}\n\n{ex.StackTrace}", 
-                    "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Initialization Error",
+                    $"Error initializing ManifestDownloaderTab: {ex.Message}\n\n{ex.StackTrace}");
             }
         }
 
@@ -393,8 +394,8 @@ namespace ManifestDownloaderGUI
             {
                 ProgressBar.Visibility = Visibility.Collapsed;
                 DownloadBtn.IsEnabled = true;
-                MessageBox.Show("Manifest download URL is missing", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    "Manifest download URL is missing");
                 return;
             }
 
@@ -403,8 +404,8 @@ namespace ManifestDownloaderGUI
             {
                 ProgressBar.Visibility = Visibility.Collapsed;
                 DownloadBtn.IsEnabled = true;
-                MessageBox.Show("Failed to get manifest URL from the .txt file", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    "Failed to get manifest URL from the .txt file");
                 return;
             }
 
@@ -422,14 +423,15 @@ namespace ManifestDownloaderGUI
             if (success)
             {
                 StatusLabel.Text = $"Manifest downloaded successfully!";
-                MessageBox.Show($"Manifest downloaded successfully!\n\n{savePath}", "Success", 
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                ModernDialog.ShowInfo(Window.GetWindow(this), "Success",
+                    $"Manifest downloaded successfully!\n\n{savePath}",
+                    icon: "✅");
             }
             else
             {
                 StatusLabel.Text = "Failed to download manifest";
-                MessageBox.Show("Failed to download manifest", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    "Failed to download manifest");
             }
         }
 
@@ -517,8 +519,8 @@ namespace ManifestDownloaderGUI
             catch (Exception ex)
             {
                 StatusLabel.Text = $"Error refreshing data: {ex.Message}";
-                MessageBox.Show($"Error refreshing data: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    $"Error refreshing data: {ex.Message}");
             }
             finally
             {
@@ -546,8 +548,8 @@ namespace ManifestDownloaderGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error opening settings: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(Window.GetWindow(this), "Error",
+                    $"Error opening settings: {ex.Message}");
             }
         }
 

@@ -10,12 +10,186 @@ namespace ManifestDownloaderGUI.Windows
         private readonly ConfigService _configService;
         private TextBox? _tokenTextBox;
 
+        private bool _suppressNotifyToggleEvent;
+
         public SettingsWindow()
         {
             InitializeComponent();
             _configService = new ConfigService(App.AppDataPath);
             LoadExistingToken();
             LoadTokenStatus();
+            LoadUpdateSettings();
+        }
+
+        private void LoadUpdateSettings()
+        {
+            _suppressNotifyToggleEvent = true;
+            NotifyUpdatesToggle.IsChecked = _configService.GetNotifyUpdates();
+            _suppressNotifyToggleEvent = false;
+
+            var installed = _configService.GetManifestDownloaderVersion();
+            UpdateStatusText.Text = string.IsNullOrEmpty(installed)
+                ? "Installed version: (unknown)"
+                : $"Installed version: {installed}";
+
+            AppVersionText.Text = $"Installed version: {AppUpdateService.CurrentAppVersionString}";
+        }
+
+        private async void CheckAppUpdateBtn_Click(object sender, RoutedEventArgs e)
+        {
+            CheckAppUpdateBtn.IsEnabled = false;
+            var originalContent = CheckAppUpdateBtn.Content;
+            CheckAppUpdateBtn.Content = "Checking…";
+            AppVersionText.Text = "Checking GitHub for the latest release…";
+
+            try
+            {
+                using var updateService = new AppUpdateService(_configService);
+                var check = await updateService.CheckForUpdateAsync();
+
+                if (!check.Success)
+                {
+                    AppVersionText.Text = $"Installed version: {AppUpdateService.CurrentAppVersionString}  —  Check failed: {check.Error}";
+                    ModernDialog.ShowError(this, "Update Check Failed",
+                        $"Could not check for updates:\n\n{check.Error}");
+                    return;
+                }
+
+                AppVersionText.Text = $"Installed version: {AppUpdateService.CurrentAppVersionString}  —  Latest: {check.LatestTag}";
+
+                if (!check.IsUpdateAvailable)
+                {
+                    ModernDialog.ShowInfo(this, "No Updates",
+                        $"You are running the latest version ({AppUpdateService.CurrentAppVersionString}).",
+                        icon: "✅");
+                    return;
+                }
+
+                var accepted = ModernDialog.ShowUpdateAvailable(
+                    this,
+                    "App Update Available",
+                    "A new version of ManifestDownloaderGUI is available. Download and install now? The app will restart automatically.",
+                    check.InstalledVersion ?? "",
+                    check.LatestTag ?? "",
+                    primaryLabel: "Update & Restart",
+                    secondaryLabel: "Later",
+                    icon: "🚀");
+                if (!accepted) return;
+
+                var dlg = new AppUpdateDownloadWindow(updateService, check) { Owner = this };
+                dlg.ShowDialog();
+
+                if (dlg.DownloadSucceeded && !string.IsNullOrEmpty(dlg.DownloadedPath))
+                {
+                    try
+                    {
+                        updateService.LaunchUpdateAndExit(dlg.DownloadedPath);
+                        Application.Current.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        ModernDialog.ShowError(this, "Update Failed",
+                            $"Could not apply update: {ex.Message}\n\nDownloaded file: {dlg.DownloadedPath}");
+                    }
+                }
+                else if (!string.IsNullOrEmpty(dlg.ErrorMessage))
+                {
+                    ModernDialog.ShowError(this, "Update Failed",
+                        $"Update failed: {dlg.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                ModernDialog.ShowError(this, "Error",
+                    $"Error checking for updates: {ex.Message}");
+            }
+            finally
+            {
+                CheckAppUpdateBtn.IsEnabled = true;
+                CheckAppUpdateBtn.Content = originalContent;
+            }
+        }
+
+        private void NotifyUpdatesToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_suppressNotifyToggleEvent) return;
+            try
+            {
+                _configService.SaveNotifyUpdates(NotifyUpdatesToggle.IsChecked == true);
+            }
+            catch (Exception ex)
+            {
+                ModernDialog.ShowError(this, "Error",
+                    $"Error saving setting: {ex.Message}");
+            }
+        }
+
+        private async void CheckUpdateBtn_Click(object sender, RoutedEventArgs e)
+        {
+            CheckUpdateBtn.IsEnabled = false;
+            var originalContent = CheckUpdateBtn.Content;
+            CheckUpdateBtn.Content = "Checking…";
+            UpdateStatusText.Text = "Checking GitHub for the latest release…";
+
+            try
+            {
+                using var updateService = new ManifestDownloaderUpdateService(_configService);
+                var check = await updateService.CheckForUpdateAsync();
+
+                if (!check.Success)
+                {
+                    UpdateStatusText.Text = $"Check failed: {check.Error}";
+                    ModernDialog.ShowError(this, "Update Check Failed",
+                        $"Could not check for updates:\n\n{check.Error}");
+                    return;
+                }
+
+                if (!check.IsUpdateAvailable)
+                {
+                    UpdateStatusText.Text = $"You already have the latest version ({check.LatestVersion}).";
+                    ModernDialog.ShowInfo(this, "No Updates",
+                        $"ManifestDownloader is up to date.\n\nVersion: {check.LatestVersion}",
+                        icon: "✅");
+                    return;
+                }
+
+                var accepted = ModernDialog.ShowUpdateAvailable(
+                    this,
+                    "ManifestDownloader Update Available",
+                    "A new version of the ManifestDownloader tool is available. Download now?",
+                    check.InstalledVersion ?? "(unknown)",
+                    check.LatestVersion ?? "",
+                    primaryLabel: "Download",
+                    secondaryLabel: "Later",
+                    icon: "⬇️");
+                if (!accepted) return;
+
+                var dlg = new DownloadProgressWindow(updateService, check) { Owner = this };
+                dlg.ShowDialog();
+
+                if (dlg.DownloadSucceeded)
+                {
+                    UpdateStatusText.Text = $"Installed version: {check.LatestVersion}";
+                    ModernDialog.ShowInfo(this, "Update Complete",
+                        $"ManifestDownloader updated to {check.LatestVersion}.",
+                        icon: "✅");
+                }
+                else if (!string.IsNullOrEmpty(dlg.ErrorMessage))
+                {
+                    ModernDialog.ShowError(this, "Update Failed",
+                        $"Update failed: {dlg.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                ModernDialog.ShowError(this, "Error",
+                    $"Error checking for updates: {ex.Message}");
+            }
+            finally
+            {
+                CheckUpdateBtn.IsEnabled = true;
+                CheckUpdateBtn.Content = originalContent;
+            }
         }
 
         private void LoadExistingToken()
@@ -105,44 +279,52 @@ namespace ManifestDownloaderGUI.Windows
 
                 if (string.IsNullOrEmpty(token))
                 {
-                    MessageBox.Show("Please enter a GitHub token or click 'Clear Token' to remove the existing one.", 
-                        "No Token", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ModernDialog.ShowInfo(this, "No Token",
+                        "Please enter a GitHub token or click 'Clear Token' to remove the existing one.",
+                        icon: "ℹ️");
                     return;
                 }
 
                 // Validate token format (GitHub tokens are typically 40 or 64 characters)
                 if (token.Length < 20)
                 {
-                    var result = MessageBox.Show(
+                    var confirmed = ModernDialog.ShowConfirm(this,
+                        "Token Validation",
                         "The token you entered seems too short. GitHub tokens are usually 40 or more characters.\n\nDo you want to save it anyway?",
-                        "Token Validation", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                    
-                    if (result == MessageBoxResult.No)
+                        primaryLabel: "Save Anyway",
+                        secondaryLabel: "Cancel",
+                        icon: "⚠️");
+
+                    if (!confirmed)
                         return;
                 }
 
                 _configService.SaveGitHubToken(token);
                 LoadTokenStatus();
-                
-                MessageBox.Show("GitHub token saved successfully!\n\nYou may need to restart the application for the changes to take effect.", 
-                    "Success", MessageBoxButton.OK, MessageBoxImage.Information);
-                
+
+                ModernDialog.ShowInfo(this, "Success",
+                    "GitHub token saved successfully!\n\nYou may need to restart the application for the changes to take effect.",
+                    icon: "✅");
+
                 DialogResult = true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving token: {ex.Message}", "Error", 
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ModernDialog.ShowError(this, "Error",
+                    $"Error saving token: {ex.Message}");
             }
         }
 
         private void ClearBtn_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(
+            var confirmed = ModernDialog.ShowConfirm(this,
+                "Clear Token",
                 "Are you sure you want to clear the GitHub token? You will go back to the default rate limit (60 requests/hour).",
-                "Clear Token", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            
-            if (result == MessageBoxResult.Yes)
+                primaryLabel: "Clear",
+                secondaryLabel: "Cancel",
+                icon: "❓");
+
+            if (confirmed)
             {
                 try
                 {
@@ -153,32 +335,36 @@ namespace ManifestDownloaderGUI.Windows
                         _tokenTextBox.Text = "";
                     }
                     LoadTokenStatus();
-                    
-                    MessageBox.Show("GitHub token cleared successfully!", 
-                        "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    ModernDialog.ShowInfo(this, "Success",
+                        "GitHub token cleared successfully!",
+                        icon: "✅");
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error clearing token: {ex.Message}", "Error", 
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    ModernDialog.ShowError(this, "Error",
+                        $"Error clearing token: {ex.Message}");
                 }
             }
         }
 
         private void HardRefreshBtn_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(
+            var confirmed = ModernDialog.ShowConfirm(this,
+                "Hard Refresh / Factory Reset",
                 "This will COMPLETELY reset the application. It will delete:\n" +
-                "- All downloaded manifests\n" +
-                "- All cached data\n" +
-                "- Your GitHub settings (including the token)\n" +
-                "- All saved selection states\n" +
-                "- The ManifestDownloader.exe tool (will be re-deployed on next launch)\n\n" +
+                "• All downloaded manifests\n" +
+                "• All cached data\n" +
+                "• Your GitHub settings (including the token)\n" +
+                "• All saved selection states\n" +
+                "• The ManifestDownloader.exe tool (will be re-downloaded on next launch)\n\n" +
                 "The application will close and you will need to restart it.\n\n" +
                 "Are you sure you want to continue?",
-                "Hard Refresh / Factory Reset", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                primaryLabel: "Reset Everything",
+                secondaryLabel: "Cancel",
+                icon: "⚠️");
 
-            if (result == MessageBoxResult.Yes)
+            if (confirmed)
             {
                 try
                 {
@@ -200,12 +386,15 @@ namespace ManifestDownloaderGUI.Windows
                         }
                     }
 
-                    MessageBox.Show("Factory reset complete. The application will now close.\nManifestDownloader.exe will be re-deployed automatically on next launch.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ModernDialog.ShowInfo(this, "Success",
+                        "Factory reset complete. The application will now close.\nManifestDownloader.exe will be re-downloaded from GitHub on next launch.",
+                        icon: "✅");
                     Application.Current.Shutdown();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error during factory reset: {ex.Message}\n\nSome files might be in use. Try closing the app and deleting the folder '{App.AppDataPath}' manually.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ModernDialog.ShowError(this, "Error",
+                        $"Error during factory reset: {ex.Message}\n\nSome files might be in use. Try closing the app and deleting the folder '{App.AppDataPath}' manually.");
                 }
             }
         }
