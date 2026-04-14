@@ -32,7 +32,7 @@ A premium, modern, and high-performance Graphical User Interface for [Morilli's 
 If you want to build the project from source:
 
 1. Install **Visual Studio 2022** or the **.NET 8.0 SDK**.
-2. Clone the repository: `git clone https://github.com/RitoShark/ManifestDownloaderGUI.git`
+2. Clone the repository: `git clone https://github.com/dazashu/ManifestDownloaderGUI.git`
 3. Restore and build:
    ```powershell
    dotnet restore
