@@ -22,7 +22,7 @@ A premium, modern, and high-performance Graphical User Interface for [Morilli's 
 
 ## 🚀 Getting Started
 
-1. **Download**: Grab the latest release from the [Releases](https://github.com/RitoShark/ManifestDownloaderGUI/releases) page.
+1. **Download**: Grab the latest release from the [Releases](https://github.com/dazashu/ManifestDownloaderGUI/releases) page.
 2. **Run**: Launch `ManifestDownloaderGUI.exe`.
 3. **Download Manifests**: Switch to the **Downloader** tab to fetch manifests.
 4. **Download Content**: Select a manifest in the **Library** and hit start!
@@ -32,7 +32,7 @@ A premium, modern, and high-performance Graphical User Interface for [Morilli's 
 If you want to build the project from source:
 
 1. Install **Visual Studio 2022** or the **.NET 8.0 SDK**.
-2. Clone the repository: `git clone https://github.com/RitoShark/ManifestDownloaderGUI.git`
+2. Clone the repository: `git clone https://github.com/dazashu/ManifestDownloaderGUI.git`
 3. Restore and build:
    ```powershell
    dotnet restore
