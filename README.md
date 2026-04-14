@@ -22,7 +22,7 @@ A premium, modern, and high-performance Graphical User Interface for [Morilli's 
 
 ## 🚀 Getting Started
 
-1. **Download**: Grab the latest release from the [Releases](https://github.com/RitoShark/ManifestDownloaderGUI/releases) page.
+1. **Download**: Grab the latest release from the [Releases](https://github.com/dazashu/ManifestDownloaderGUI/releases) page.
 2. **Run**: Launch `ManifestDownloaderGUI.exe`.
 3. **Download Manifests**: Switch to the **Downloader** tab to fetch manifests.
 4. **Download Content**: Select a manifest in the **Library** and hit start!
