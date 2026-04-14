@@ -84,10 +84,7 @@ namespace ManifestDownloaderGUI.Services
                 result.AssetSize = asset.Size;
                 result.Success = true;
 
-                if (result.LatestVersion != null && result.LatestVersion > CurrentAppVersion)
-                {
-                    result.IsUpdateAvailable = true;
-                }
+                result.IsUpdateAvailable = EvaluateIsUpdateAvailable(result.LatestTag, result.LatestVersion);
             }
             catch (Exception ex)
             {
@@ -95,6 +92,40 @@ namespace ManifestDownloaderGUI.Services
             }
 
             return result;
+        }
+
+        private bool EvaluateIsUpdateAvailable(string latestTag, Version? latestVersion)
+        {
+            var acknowledgedTag = _configService.GetAcknowledgedAppVersion();
+
+            // First-ever check on this install: trust whatever is running right now.
+            // Save the latest tag as "acknowledged" so we never nag the user about a
+            // release they are already on (e.g. they just downloaded it). Any future
+            // release genuinely newer than this will still trigger a prompt.
+            if (string.IsNullOrEmpty(acknowledgedTag))
+            {
+                _configService.SaveAcknowledgedAppVersion(latestTag);
+                return false;
+            }
+
+            // Same tag they already dismissed/installed → never nag again.
+            if (string.Equals(acknowledgedTag, latestTag, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Compare parsed versions of (acknowledged → latest). If latest is strictly
+            // newer than what the user has acknowledged, it's a real new release.
+            var acknowledgedVersion = ParseVersionFromTag(acknowledgedTag);
+            if (acknowledgedVersion != null && latestVersion != null)
+                return latestVersion > acknowledgedVersion;
+
+            // Fall back to string comparison: any different tag = update available.
+            return true;
+        }
+
+        public void AcknowledgeVersion(string tag)
+        {
+            if (!string.IsNullOrEmpty(tag))
+                _configService.SaveAcknowledgedAppVersion(tag);
         }
 
         public async Task<string> DownloadAsync(

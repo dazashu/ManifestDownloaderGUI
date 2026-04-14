@@ -38,16 +38,23 @@ namespace ManifestDownloaderGUI
                 var configService = new ConfigService(AppDataPath);
                 var updateService = new ManifestDownloaderUpdateService(configService);
 
-                if (!updateService.ExeExists)
+                // Defer all network / dialog work until after MainWindow has been
+                // created and shown. Doing it synchronously inside OnStartup blocks
+                // the UI thread and deadlocks any awaited HTTP call (the async
+                // continuation can't resume on a blocked dispatcher).
+                Dispatcher.InvokeAsync(async () =>
                 {
-                    BootstrapDownloadBlocking(updateService);
-                }
-                else
-                {
-                    ScheduleBackgroundUpdateCheck(configService, updateService);
-                }
+                    if (!updateService.ExeExists)
+                    {
+                        await BootstrapDownloadAsync(updateService);
+                    }
+                    else
+                    {
+                        ScheduleBackgroundUpdateCheck(configService, updateService);
+                    }
 
-                ScheduleBackgroundAppUpdateCheck(configService);
+                    ScheduleBackgroundAppUpdateCheck(configService);
+                }, DispatcherPriority.ApplicationIdle);
             }
             catch (Exception ex)
             {
@@ -56,33 +63,34 @@ namespace ManifestDownloaderGUI
             }
         }
 
-        private void BootstrapDownloadBlocking(ManifestDownloaderUpdateService updateService)
+        private async Task BootstrapDownloadAsync(ManifestDownloaderUpdateService updateService)
         {
             try
             {
-                var check = updateService.CheckForUpdateAsync().GetAwaiter().GetResult();
+                var owner = Current?.MainWindow;
+                var check = await updateService.CheckForUpdateAsync();
                 if (!check.Success || string.IsNullOrEmpty(check.DownloadUrl))
                 {
-                    ModernDialog.ShowError(null, "Setup Required",
+                    ModernDialog.ShowError(owner, "Setup Required",
                         "ManifestDownloader.exe is not installed and could not be downloaded from GitHub:\n\n" +
                         (check.Error ?? "Unknown error") +
                         "\n\nPlease check your internet connection and restart the app.");
                     return;
                 }
 
-                var dlg = new DownloadProgressWindow(updateService, check);
+                var dlg = new DownloadProgressWindow(updateService, check) { Owner = owner };
                 dlg.ShowDialog();
 
                 if (!dlg.DownloadSucceeded)
                 {
-                    ModernDialog.ShowError(null, "Download Failed",
+                    ModernDialog.ShowError(owner, "Download Failed",
                         "The ManifestDownloader tool could not be downloaded. The app may not function until it is installed.\n\n" +
                         (dlg.ErrorMessage ?? ""));
                 }
             }
             catch (Exception ex)
             {
-                ModernDialog.ShowError(null, "Setup Error",
+                ModernDialog.ShowError(Current?.MainWindow, "Setup Error",
                     $"Error during first-time download: {ex.Message}");
             }
         }
@@ -170,13 +178,20 @@ namespace ManifestDownloaderGUI
                             secondaryLabel: "Later",
                             icon: "🚀");
 
-                        if (!accepted) return;
+                        if (!accepted)
+                        {
+                            // User clicked "Later" — remember the tag so we don't
+                            // nag them again until an even newer release appears.
+                            appUpdateService.AcknowledgeVersion(check.LatestTag ?? "");
+                            return;
+                        }
 
                         var dlg = new AppUpdateDownloadWindow(appUpdateService, check) { Owner = owner };
                         dlg.ShowDialog();
 
                         if (dlg.DownloadSucceeded && !string.IsNullOrEmpty(dlg.DownloadedPath))
                         {
+                            appUpdateService.AcknowledgeVersion(check.LatestTag ?? "");
                             try
                             {
                                 appUpdateService.LaunchUpdateAndExit(dlg.DownloadedPath);

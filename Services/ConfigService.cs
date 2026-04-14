@@ -154,6 +154,18 @@ namespace ManifestDownloaderGUI.Services
             config.NotifyUpdates = value;
             SaveConfig(config);
         }
+
+        public string? GetAcknowledgedAppVersion()
+        {
+            return LoadConfig().AcknowledgedAppVersion;
+        }
+
+        public void SaveAcknowledgedAppVersion(string tag)
+        {
+            var config = LoadConfig();
+            config.AcknowledgedAppVersion = tag;
+            SaveConfig(config);
+        }
     }
 
     /// <summary>
@@ -169,6 +181,9 @@ namespace ManifestDownloaderGUI.Services
 
         [JsonProperty("notifyUpdates")]
         public bool? NotifyUpdates { get; set; }
+
+        [JsonProperty("acknowledgedAppVersion")]
+        public string? AcknowledgedAppVersion { get; set; }
     }
 }
 
